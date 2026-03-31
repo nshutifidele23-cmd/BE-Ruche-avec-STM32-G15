@@ -1,7 +1,7 @@
 import serial
 import requests
 
-ser = serial.Serial("COM3", 115200)  # change COM port
+ser = serial.Serial("COM3", 115200)  # il faut changer le PORT manuelement
 
 API_KEY = "09T0WCVX9FPUAWNN"
 
