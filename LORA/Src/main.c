@@ -1,17 +1,17 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
+  
   * @file           : main.c
-  * @brief          : USART1 → LoRa → USART2 terminal bridge
-  *                   Board A: receives data on USART1, forwards via LoRa
-  *                   Board B: receives LoRa packets, prints to USART2 terminal
+  * @brief          : Pont USART1 → LoRa → terminal USART2
+  *                   Carte A : reçoit les données sur USART1, les transmet via LoRa
+  *                   Carte B : reçoit les paquets LoRa, les affiche sur le terminal USART2
   *
-  *   To select which role a board plays, define either:
-  *       #define BOARD_SENDER    (receives on USART1, transmits via LoRa)
-  *   or
-  *       #define BOARD_RECEIVER  (receives LoRa, prints to USART2)
-  *   in the BOARD ROLE section below, or pass it as a compiler flag.
-  ******************************************************************************
+  *   Pour choisir le rôle de chaque carte, définir l'une des deux macros :
+  *       #define BOARD_SENDER    (reçoit sur USART1, émet via LoRa)
+  *   ou
+  *       #define BOARD_RECEIVER  (reçoit via LoRa, affiche sur USART2)
+  *   dans la section RÔLE DE LA CARTE ci-dessous, ou via un flag de compilation.
+ 
   */
 /* USER CODE END Header */
 
@@ -28,13 +28,12 @@
 
 /* USER CODE BEGIN PD */
 
-/* ── BOARD ROLE ─────────────────────────────────────────────────────────────
- * Uncomment exactly ONE of the two lines below before flashing each board.
- * --------------------------------------------------------------------------*/
-#define BOARD_SENDER      // This board: USART1 in → LoRa out
-//#define BOARD_RECEIVER  // This board: LoRa in  → USART2 terminal out
+/*  RÔLE DE LA CARTE 
 
-/* ── RF / LoRa parameters ───────────────────────────────────────────────────*/
+#define BOARD_SENDER      // Cette carte : entrée USART1 → sortie LoRa
+//#define BOARD_RECEIVER  // Cette carte : entrée LoRa  → terminal USART2
+
+/*  Paramètres RF / LoRa */
 #define MAX_BUFFER_SIZE         256
 #define RF_FREQ                 868000000   // 868 MHz
 #define TX_POWER                14          // dBm
@@ -42,27 +41,27 @@
 #define LORA_SPREADING_FACTOR   LORA_SF7
 #define LORA_CODING_RATE        LORA_CR_4_5
 #define LORA_PREAMBLE_LENGTH    8
-#define RX_TIMEOUT_MS           5000        // ms – receiver re-arms after this
+#define RX_TIMEOUT_MS           5000        // ms 
 
 /* USER CODE END PD */
 
 /* USER CODE BEGIN PV */
 
-/* ── Shared buffers ─────────────────────────────────────────────────────────*/
+
 static PacketParams_t packetParams;
 
-/* ── USART1 sensor / upstream device (SENDER board only) ───────────────────*/
-static uint8_t  usart1Byte[1];             // single-byte DMA/IT staging
+/*  USART1 : carte SENDER 
+static uint8_t  usart1Byte[1];             
 static char     usart1Line[MAX_BUFFER_SIZE];
 static uint16_t usart1Count  = 0;
-static bool     lineReady    = false;      // set by ISR, cleared by main loop
+static bool     lineReady    = false;      // mis à true par l'ISR, remis à false par la boucle principale
 
-/* ── LoRa RX buffer (RECEIVER board only) ──────────────────────────────────*/
+/*   réception LoRa (carte RECEIVER uniquement)*/
 static char     loraRxBuf[MAX_BUFFER_SIZE];
 static uint8_t  loraRxLen = 0;
-static bool     loraRxReady = false;       // set by IRQ handler, cleared by main loop
+static bool     loraRxReady = false;       // mis à true par le gestionnaire d'IRQ, remis à false par la boucle principale
 
-/* ── IRQ → main-loop event pointer ─────────────────────────────────────────*/
+/*  Pointeur d'événement IRQ → boucle principale */
 static void (*volatile pendingEvent)(void) = NULL;
 
 /* USER CODE END PV */
@@ -77,7 +76,7 @@ static void Radio_IRQ_Handler(RadioIrqMasks_t irq);
 static void LoRa_StartRX(void);
 static void LoRa_Transmit(const uint8_t *payload, uint8_t size);
 
-/* ── Event handlers (called from main loop, never from IRQ) ─────────────────*/
+/*  Gestionnaires d'événements */
 static void Event_TxDone(void);
 static void Event_RxDone(void);
 static void Event_Timeout(void);
@@ -86,9 +85,9 @@ static void Event_CrcError(void);
 
 /* USER CODE BEGIN 0 */
 
-/* ── Helpers ────────────────────────────────────────────────────────────────*/
 
-/** Print a null-terminated string to the PC terminal (USART2). */
+
+/** Envoie une chaîne terminée par '\0' vers le terminal PC (USART2). */
 static void UART2_Print(const char *s)
 {
     HAL_UART_Transmit(&huart2, (const uint8_t *)s, strlen(s), HAL_MAX_DELAY);
@@ -96,9 +95,7 @@ static void UART2_Print(const char *s)
 
 /* USER CODE END 0 */
 
-/* ============================================================
- *  main
- * ============================================================*/
+
 int main(void)
 {
     HAL_Init();
@@ -106,9 +103,9 @@ int main(void)
 
     MX_GPIO_Init();
     MX_SUBGHZ_Init();
-    MX_USART2_UART_Init();  // PC terminal (both boards)
-    MX_USART1_UART_Init();  // Upstream device link (sender board)
-    //MX_LPUART1_UART_Init(); // kept in case other peripherals need it
+    MX_USART2_UART_Init();  // Terminal PC 
+    MX_USART1_UART_Init();  // Liaison avec le STM32L476RG
+    //MX_LPUART1_UART_Init(); 
 
     BSP_LED_Init(LED_BLUE);
     BSP_LED_Init(LED_GREEN);
@@ -117,30 +114,30 @@ int main(void)
     Radio_Init();
 
 #if defined(BOARD_SENDER)
-    /* ── SENDER: arm USART1 to collect lines from the upstream device ───────*/
-    UART2_Print("\r\n[SENDER] Waiting for USART1 data...\r\n");
+    /* SENDER : armer USART1 pour recevoir les lignes du STM32L476RG ─*/
+    UART2_Print("\r\n[SENDER] En attente de donnees sur USART1...\r\n");
     BSP_LED_On(LED_BLUE);
-    HAL_UART_Receive_IT(&huart1, usart1Byte, 1); // arm first byte
+    HAL_UART_Receive_IT(&huart1, usart1Byte, 1); //  réception du premier octet
 
     while (1)
     {
-        /* Wait until the ISR assembles a complete line */
+        /* Attendre  l'ISR  */
         if (lineReady)
         {
             lineReady = false;
             BSP_LED_Toggle(LED_GREEN);
 
-            /* Forward the line over LoRa */
+            /* Transmettre la ligne via LoRa */
             uint8_t len = (uint8_t)strlen(usart1Line);
             LoRa_Transmit((uint8_t *)usart1Line, len);
 
-            /* Optional: echo to local terminal for debug */
-            UART2_Print("[TX] ");
-            UART2_Print(usart1Line);
-            UART2_Print("\r\n");
+            /*  écho sur le terminal local pour le débogage */
+            //UART2_Print("[TX] ");
+            //UART2_Print(usart1Line);
+            //UART2_Print("\r\n");
         }
 
-        /* Process deferred radio events */
+        
         if (pendingEvent)
         {
             void (*evt)(void) = pendingEvent;
@@ -150,8 +147,8 @@ int main(void)
     }
 
 #elif defined(BOARD_RECEIVER)
-    /* ── RECEIVER: stay in continuous RX, print every packet ───────────────*/
-    UART2_Print("\r\n[RECEIVER] Listening for LoRa packets...\r\n");
+    /*  RECEIVER : rester en réception continue, afficher chaque paquet*/
+    UART2_Print("\r\n[RECEIVER] En ecoute de paquets LoRa...\r\n");
     BSP_LED_On(LED_BLUE);
     LoRa_StartRX();
 
@@ -162,13 +159,13 @@ int main(void)
             loraRxReady = false;
             BSP_LED_Toggle(LED_GREEN);
 
-            /* Print the received payload to the terminal */
+            /* Afficher le poids reçue sur le terminal */
             UART2_Print("[RX] ");
             UART2_Print(loraRxBuf);
             UART2_Print("\r\n");
         }
 
-        /* Process deferred radio events */
+        
         if (pendingEvent)
         {
             void (*evt)(void) = pendingEvent;
@@ -178,13 +175,11 @@ int main(void)
     }
 
 #else
-    #error "Define either BOARD_SENDER or BOARD_RECEIVER before building."
+    #error "Définir BOARD_SENDER ou BOARD_RECEIVER avant la compilation."
 #endif
 }
 
-/* ============================================================
- *  Radio helpers
- * ============================================================*/
+
 
 static void LoRa_StartRX(void)
 {
@@ -193,7 +188,7 @@ static void LoRa_StartRX(void)
     SUBGRF_SetSwitch(RFO_LP, RFSWITCH_RX);
     packetParams.Params.LoRa.PayloadLength = 0xFF;
     SUBGRF_SetPacketParams(&packetParams);
-    /* 0 = continuous RX (no timeout). Use RX_TIMEOUT_MS << 6 for timed RX. */
+    
     SUBGRF_SetRx(RX_TIMEOUT_MS << 6);
 }
 
@@ -202,14 +197,14 @@ static void LoRa_Transmit(const uint8_t *payload, uint8_t size)
     uint16_t mask = IRQ_TX_DONE | IRQ_RX_TX_TIMEOUT;
     SUBGRF_SetDioIrqParams(mask, mask, IRQ_RADIO_NONE, IRQ_RADIO_NONE);
     SUBGRF_SetSwitch(RFO_LP, RFSWITCH_TX);
-    /* SX126x errata 5.1 – set bit before each TX */
+    
     SUBGRF_WriteRegister(0x0889, SUBGRF_ReadRegister(0x0889) | 0x04);
     packetParams.Params.LoRa.PayloadLength = size;
     SUBGRF_SetPacketParams(&packetParams);
-    SUBGRF_SendPayload((uint8_t *)payload, size, 0); // 0 = no TX timeout
+    SUBGRF_SendPayload((uint8_t *)payload, size, 0); 
 }
 
-/* ── Radio IRQ callback (runs in IRQ context – keep it minimal) ─────────────*/
+/* ── Callback IRQ radio */
 static void Radio_IRQ_Handler(RadioIrqMasks_t irq)
 {
     switch (irq)
@@ -219,8 +214,7 @@ static void Radio_IRQ_Handler(RadioIrqMasks_t irq)
             break;
 
         case IRQ_RX_DONE:
-            /* Read payload here while still in IRQ – it must happen before
-             * the radio state changes. Flag it, let main loop print it.     */
+            
             SUBGRF_WriteRegister(0x0920, 0x00);
             SUBGRF_WriteRegister(0x0944, SUBGRF_ReadRegister(0x0944) | 0x02);
             SUBGRF_GetPayload((uint8_t *)loraRxBuf, &loraRxLen, 0xFF);
@@ -243,19 +237,17 @@ static void Radio_IRQ_Handler(RadioIrqMasks_t irq)
     }
 }
 
-/* ── Deferred event handlers (run in main-loop context) ─────────────────────*/
+
 
 static void Event_TxDone(void)
 {
-    /* After a successful TX, the sender goes back to waiting for USART1 data.
-     * Optionally arm RX briefly here if you need ACKs in the future.         */
+   
     BSP_LED_Off(LED_RED);
 }
 
 static void Event_RxDone(void)
 {
-    /* loraRxReady / loraRxBuf already set in IRQ handler.
-     * Re-arm the receiver so it keeps listening.                              */
+      
 #if defined(BOARD_RECEIVER)
     LoRa_StartRX();
 #endif
@@ -263,17 +255,17 @@ static void Event_RxDone(void)
 
 static void Event_Timeout(void)
 {
-    UART2_Print("[WARN] Radio timeout\r\n");
+    UART2_Print("[WARN] Timeout radio\r\n");
     BSP_LED_Toggle(LED_RED);
 
 #if defined(BOARD_RECEIVER)
-    LoRa_StartRX(); // re-arm
+    LoRa_StartRX(); // réarmement
 #endif
 }
 
 static void Event_CrcError(void)
 {
-    UART2_Print("[ERR] CRC / header error\r\n");
+    UART2_Print("[ERR] Erreur CRC / en-tete\r\n");
     BSP_LED_On(LED_RED);
 
 #if defined(BOARD_RECEIVER)
@@ -282,13 +274,12 @@ static void Event_CrcError(void)
 }
 
 /* ============================================================
- *  HAL callbacks
+ *  Callbacks HAL
  * ============================================================*/
 
 /**
-  * @brief  UART RX complete – only USART1 (sensor / upstream device) matters
-  *         on the SENDER board. Accumulates bytes into usart1Line[] until
-  *         CR or LF, then sets lineReady for the main loop.
+  * @brief  Réception UART complète – seul USART1  est
+  *         concerné sur la carte SENDER.
   */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -304,7 +295,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         {
             usart1Line[usart1Count] = '\0';
             usart1Count = 0;
-            lineReady = true;   // signal main loop
+            lineReady = true;   // signaler la boucle principale
         }
     }
     else
@@ -313,13 +304,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             usart1Line[usart1Count++] = (char)ch;
     }
 
-    /* Re-arm for the next byte */
+    /* Réarmer la réception pour le prochain octet */
     HAL_UART_Receive_IT(&huart1, usart1Byte, 1);
 }
 
-/* ============================================================
- *  Radio and clock init (unchanged from original project)
- * ============================================================*/
+
 
 void Radio_Init(void)
 {
@@ -335,7 +324,7 @@ void Radio_Init(void)
     SUBGRF_SetStopRxTimerOnPreambleDetect(false);
     SUBGRF_SetPacketType(PACKET_TYPE_LORA);
 
-    /* Private sync word */
+    /* Mot de synchronisation privé */
     SUBGRF_WriteRegister(REG_LR_SYNCWORD,      (LORA_MAC_PRIVATE_SYNCWORD >> 8) & 0xFF);
     SUBGRF_WriteRegister(REG_LR_SYNCWORD + 1,   LORA_MAC_PRIVATE_SYNCWORD       & 0xFF);
 
@@ -355,7 +344,7 @@ void Radio_Init(void)
     packetParams.Params.LoRa.PreambleLength      = LORA_PREAMBLE_LENGTH;
     SUBGRF_SetPacketParams(&packetParams);
 
-    /* SX126x errata 15.4 – IQ polarity fix */
+    
     SUBGRF_WriteRegister(0x0736, SUBGRF_ReadRegister(0x0736) | (1 << 2));
 }
 
