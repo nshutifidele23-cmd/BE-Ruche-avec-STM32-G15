@@ -50,7 +50,7 @@
 
 static PacketParams_t packetParams;
 
-/*  USART1 : carte SENDER 
+/*  USART1 : carte SENDER */
 static uint8_t  usart1Byte[1];             
 static char     usart1Line[MAX_BUFFER_SIZE];
 static uint16_t usart1Count  = 0;
